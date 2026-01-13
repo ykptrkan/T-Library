@@ -8,7 +8,7 @@
 
 Rust'ın gücü ve Tauri'nin hafifliği ile geliştirilen bu proje; piksel piksel işlenen özel temaları, not alma özelliklerini ve geniş kütüphane yönetimini sistem kaynaklarını yormadan sunar.
 
-![T-Library](src-tauri\icons\128x128@2x.png)
+![T-Library](src-tauri/icons/128x128@2x.png)
 
 ## ✨ Özellikler
 
