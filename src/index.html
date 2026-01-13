@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>T-Library</title>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    /* --- TEMEL AYARLAR --- */
+    body { margin: 0; background-color: #121212; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+    
+    /* --- NAVBAR --- */
+    #navbar { height: 50px; background-color: #1a1a1a; display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid #2a2a2a; justify-content: space-between; user-select: none; z-index: 100; transition: margin-top 0.3s ease; }
+    .nav-left, .nav-right { display: flex; gap: 8px; align-items: center; }
+    .logo { color: #147358; font-weight: 700; font-size: 20px; margin-right: 20px; letter-spacing: 1px; }
+    .icon-btn { background: transparent; color: #aaa; border: none; width: 36px; height: 36px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: all 0.2s ease; }
+    .icon-btn:hover { background: #333; color: #fff; }
+    .icon-btn.active { background: #2d2d2d; color: #147358; }
+    body.fullscreen-mode #navbar { display: none; }
+    body.fullscreen-mode #notes-sidebar { top: 0; height: calc(100% - 25px); }
+
+    /* --- DROPDOWNS --- */
+    .dropdown { position: relative; }
+    .dropdown-content { display: none; position: absolute; top: 115%; left: 0; background-color: #252526; min-width: 200px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 1000; border-radius: 8px; border: 1px solid #333; padding: 8px; }
+    .dropdown-content.show { display: block; animation: fadeIn 0.1s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+    .dropdown-content button { width: 100%; text-align: left; background: none; border: none; padding: 8px 12px; color: #ddd; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 13px; border-radius: 4px; transition: background 0.2s; }
+    .dropdown-content button:hover { background-color: #3e3e3e; color: #fff; }
+    
+    /* --- SIDEBAR --- */
+    #notes-sidebar { position: fixed; top: 51px; right: -320px; width: 320px; height: calc(100% - 76px); background-color: #1a1a1a; border-left: 1px solid #333; z-index: 90; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; box-shadow: -5px 0 15px rgba(0,0,0,0.3); }
+    #notes-sidebar.open { right: 0; }
+    .sidebar-header { padding: 15px 20px; border-bottom: 1px solid #333; font-weight: 600; display: flex; justify-content: space-between; align-items: center; color: #eee; }
+    .sidebar-content { flex-grow: 1; overflow-y: auto; padding: 15px; }
+    .note-item { background: #252526; padding: 12px; margin-bottom: 10px; border-radius: 6px; cursor: pointer; border-left: 4px solid #ffeb3b; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; }
+    .note-item:hover { background: #2d2d2d; }
+    
+    /* --- KÜTÜPHANE --- */
+    #library-view { padding: 40px; flex-grow: 1; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 30px; justify-content: center; align-content: flex-start; }
+    .book-card { width: 160px; height: 270px; background: #252526; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; flex-direction: column; border: 1px solid #333; position: relative; }
+    .book-card:hover { transform: translateY(-5px); border-color: #147358; box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
+    .book-cover { width: 100%; height: 220px; object-fit: cover; background: #111; opacity: 0.9; transition: opacity 0.2s; }
+    .book-card:hover .book-cover { opacity: 1; }
+    .book-title { padding: 10px; font-size: 13px; text-align: center; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .book-progress { height: 4px; background: #333; width: 100%; }
+    .book-progress-bar { height: 100%; background: #147358; width: 0%; }
+    .delete-book-btn { position: absolute; top: 5px; right: 5px; background: rgba(0, 0, 0, 0.7); color: #ff4d4d; width: 30px; height: 30px; border-radius: 50%; display: none; align-items: center; justify-content: center; border: 1px solid #ff4d4d; z-index: 10; transition: all 0.2s; }
+    .book-card:hover .delete-book-btn { display: flex; }
+    .delete-book-btn:hover { background: #ff4d4d; color: white; transform: scale(1.1); }
+
+    /* --- OKUYUCU --- */
+    #reader-view { display: none; flex-grow: 1; position: relative; overflow: hidden; height: 100%; background-color: #0e0e0e; }
+    #pdf-scroller { width: 100%; height: 100%; overflow-y: auto; position: relative; }
+    #pdf-spacer { position: absolute; top: 0; left: 0; width: 1px; z-index: -1; } 
+    .page-wrapper { 
+        position: absolute; left: 0; right: 0; margin: auto; 
+        box-shadow: 0 0 15px rgba(0,0,0,0.7); background-color: #111; 
+        transform-origin: center top; 
+        will-change: width, height, top;
+    }
+    /* PDF SAYFALARI: Artık CSS Filter YOK, çünkü Rust boyayıp gönderiyor */
+    .pdf-page { display: block; width: 100%; height: 100%; transition: opacity 0.2s; }
+    
+    /* EPUB STYLES */
+    .epub-content { 
+        padding: 40px; 
+        /* Varsayılan (Day) */
+        background-color: #ffffff; 
+        color: #000000; 
+        font-size: 18px; 
+        line-height: 1.6; 
+        overflow: hidden; 
+    }
+    .epub-content p { margin-bottom: 1em; }
+    .epub-content img { max-width: 100%; height: auto; }
+    
+    /* UI ELEMENTS */
+    .highlight-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: text; }
+    .highlight-box { position: absolute; background-color: rgba(255, 235, 59, 0.3); border: 1px solid rgba(255, 235, 59, 0.8); mix-blend-mode: multiply; }
+    #brightness-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; opacity: 0; pointer-events: none; z-index: 9999; transition: opacity 0.1s; }
+    #bottom-bar { height: 25px; background: #1f1f1f; display: flex; justify-content: center; align-items: center; font-size: 12px; color: #888; border-top: 1px solid #333; z-index: 100; }
+    
+    /* --- TEMA MODLARI (CSS Sadece EPUB ve UI için, PDF Rust'ta işlenir) --- */
+    
+    /* Gece Modu */
+    .theme-night .epub-content { background-color: #121212 !important; color: #b0b0b0 !important; }
+
+    /* Gece Kontrast */
+    .theme-night_contrast .epub-content { background-color: #000000 !important; color: #ffffff !important; }
+
+    /* Sepya */
+    .theme-sepia .epub-content { background-color: #f4ecd8 !important; color: #5b4636 !important; }
+
+    /* Sepya Kontrast */
+    .theme-sepia_contrast .epub-content { background-color: #e6d2b4 !important; color: #3e2b14 !important; }
+
+    /* Alacakaranlık */
+    .theme-twilight .epub-content { background-color: #202225 !important; color: #b9bbbe !important; }
+    
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #121212; }
+    ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+  <div id="brightness-overlay"></div>
+
+  <div id="navbar">
+    <div class="nav-left">
+      <div class="logo">T-Library</div>
+      <button class="icon-btn" onclick="showLibrary()" title="Kütüphane"><i class="ph ph-books"></i></button>
+      <div class="dropdown">
+        <button class="icon-btn" onclick="toggleDropdown('theme-menu')" title="Temalar"><i class="ph ph-palette"></i></button>
+        <div id="theme-menu" class="dropdown-content">
+          <button onclick="setTheme('day')"><i class="ph ph-sun"></i> Gündüz</button>
+          <button onclick="setTheme('night')"><i class="ph ph-moon"></i> Gece</button>
+          <button onclick="setTheme('night_contrast')"><i class="ph ph-moon-stars"></i> Gece Kontrast</button>
+          <button onclick="setTheme('sepia')"><i class="ph ph-coffee"></i> Sepya</button>
+          <button onclick="setTheme('sepia_contrast')"><i class="ph ph-coffee"></i> Sepya Kontrast</button>
+          <button onclick="setTheme('twilight')"><i class="ph ph-cloud-moon"></i> Alacakaranlık</button>
+        </div>
+      </div>
+      <div class="dropdown">
+        <button class="icon-btn" onclick="toggleDropdown('settings-menu')" title="Ayarlar"><i class="ph ph-sliders"></i></button>
+        <div id="settings-menu" class="dropdown-content" style="min-width: 200px;">
+          <div style="padding: 10px;">
+            <label style="color:#aaa; font-size:12px;">Parlaklık</label>
+            <input type="range" min="20" max="100" value="100" style="width: 100%;" oninput="updateBrightness(this.value)">
+            <hr style="border-color:#333; margin:10px 0;">
+            <label style="color:#aaa; font-size:12px;">Zoom</label>
+            <input type="range" id="zoom-slider" min="0.5" max="2.5" step="0.1" value="1.0" style="width: 100%;" oninput="updateZoom(this.value)">
+          </div>
+        </div>
+      </div>
+      <button id="highlight-btn" class="icon-btn" onclick="toggleHighlightMode()" title="Çizim"><i class="ph ph-highlighter"></i></button>
+      <button class="icon-btn" onclick="toggleNotesSidebar()" title="Notlar"><i class="ph ph-notebook"></i></button>
+    </div>
+    <div class="nav-right">
+       <button class="icon-btn" onclick="toggleFullScreen()" title="Tam Ekran"><i class="ph ph-arrows-out"></i></button>
+       <button class="icon-btn" onclick="addFolder()" title="Klasör"><i class="ph ph-folder-plus"></i></button>
+       <button class="icon-btn" onclick="addBook()" title="Kitap"><i class="ph ph-plus-circle"></i></button>
+    </div>
+  </div>
+
+  <div id="notes-sidebar">
+      <div class="sidebar-header"><span><i class="ph ph-notebook"></i> Notlar</span> <span style="cursor:pointer" onclick="toggleNotesSidebar()"><i class="ph ph-x"></i></span></div>
+      <div id="notes-list" class="sidebar-content"></div>
+  </div>
+
+  <div id="library-view"></div>
+
+  <div id="reader-view">
+    <div id="pdf-scroller">
+        <div id="pdf-spacer"></div> 
+        <div id="pdf-visible-content"></div> 
+    </div>
+  </div>
+
+  <div id="bottom-bar">Sayfa: - / -</div>
+
+  <script>
+    const { invoke } = window.__TAURI__.tauri;
+    const { open } = window.__TAURI__.dialog;
+    
+    let appWindow = null;
+    try { if(window.__TAURI__.window) appWindow = window.__TAURI__.window.appWindow; } catch(e) {}
+
+    let currentBook = null;
+    let totalPages = 0;
+    let currentZoom = 1.0;
+    let isHighlightMode = false;
+    let activeTheme = "day"; // Aktif tema takibi
+    
+    const BASE_PAGE_HEIGHT = 850; 
+    const PAGE_MARGIN = 20;
+    let renderBuffer = 2; 
+
+    let isDrawing = false;
+    let startX, startY;
+    let activeBox = null;
+
+    loadLibrary();
+
+    function toggleDropdown(id) {
+        document.querySelectorAll('.dropdown-content').forEach(d => { if(d.id !== id) d.classList.remove('show'); });
+        document.getElementById(id).classList.toggle("show");
+    }
+    window.onclick = function(e) {
+        if (!e.target.closest('.icon-btn') && !e.target.matches('input') && !e.target.closest('.dropdown-content')) {
+            document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
+        }
+    }
+    
+    async function toggleFullScreen() {
+        if(!appWindow) return;
+        const isFullscreen = await appWindow.isFullscreen();
+        await appWindow.setFullscreen(!isFullscreen);
+        if (!isFullscreen) document.body.classList.add('fullscreen-mode'); else document.body.classList.remove('fullscreen-mode');
+    }
+    document.addEventListener('keyup', async (e) => { 
+        if (e.key === "Escape" && appWindow) { await appWindow.setFullscreen(false); document.body.classList.remove('fullscreen-mode'); } 
+    });
+
+    // --- LIBRARY ---
+    async function addBook() {
+      const selected = await open({ multiple: false, filters: [{ name: 'Books', extensions: ['pdf', 'epub'] }] });
+      if (selected) { try { await invoke("add_book_to_library", { path: selected }); loadLibrary(); } catch(e) { alert(e); } }
+    }
+    async function addFolder() {
+      const selected = await open({ directory: true, multiple: false });
+      if (selected) { try { await invoke("add_folder_to_library", { folderPath: selected }); loadLibrary(); } catch(e) { loadLibrary(); } }
+    }
+    async function loadLibrary() {
+      const books = await invoke("get_library");
+      const container = document.getElementById("library-view");
+      if (books.length === 0) { container.innerHTML = '<div style="margin-top:50px;color:#666;text-align:center;width:100%;">Kütüphane boş.</div>'; return; }
+      container.innerHTML = "";
+      books.forEach(book => {
+        const percent = book.total_pages > 0 ? (book.current_page / book.total_pages) * 100 : 0;
+        const card = document.createElement("div");
+        card.className = "book-card";
+        const coverSrc = book.cover ? `data:image/jpeg;base64,${book.cover}` : 'https://placehold.co/160x220/333/ccc?text=No+Cover';
+        card.innerHTML = `<img class="book-cover" src="${coverSrc}"><div class="book-title">${book.title}</div><div class="book-progress"><div class="book-progress-bar" style="width: ${percent}%"></div></div><div class="delete-book-btn" onclick="deleteBook(event, ${book.id})"><i class="ph ph-trash"></i></div>`;
+        card.onclick = (e) => { if (!e.target.closest('.delete-book-btn')) openBook(book); };
+        container.appendChild(card);
+      });
+    }
+    async function deleteBook(event, id) {
+        event.stopPropagation();
+        if(confirm("Silmek istediğinize emin misiniz?")) {
+            try { await invoke("delete_book", { id: id }); loadLibrary(); } catch(e) { alert("Silinemedi: " + e); }
+        }
+    }
+    function showLibrary() {
+        document.getElementById("library-view").style.display = "flex";
+        document.getElementById("reader-view").style.display = "none";
+        document.getElementById("notes-sidebar").classList.remove("open");
+        loadLibrary();
+    }
+
+    // --- READER CORE ---
+    async function openBook(book) {
+      currentBook = book;
+      document.getElementById("library-view").style.display = "none";
+      document.getElementById("reader-view").style.display = "flex";
+
+      const visibleContainer = document.getElementById("pdf-visible-content");
+      visibleContainer.innerHTML = ""; 
+      const scroller = document.getElementById("pdf-scroller");
+      scroller.scrollTop = 0; 
+
+      try {
+        totalPages = await invoke("open_book_for_reading", { path: book.path });
+        loadNotesList();
+        
+        // Temayı sıfırla veya mevcut temayı uygula
+        setTheme(activeTheme); 
+        
+        if (book.format === "epub") {
+            document.getElementById("pdf-spacer").style.display = "none";
+            scroller.onscroll = null; 
+            renderEpubChapter(book.current_page > 0 ? book.current_page : 0);
+        } else {
+            document.getElementById("pdf-spacer").style.display = "block";
+            scroller.onscroll = renderVisiblePages; 
+            updateSpacerHeight();
+            renderVisiblePages();
+            
+            if (book.current_page > 0) {
+                setTimeout(() => {
+                    const totalPageHeight = (BASE_PAGE_HEIGHT * currentZoom) + PAGE_MARGIN;
+                    scroller.scrollTop = book.current_page * totalPageHeight;
+                }, 100);
+            }
+        }
+      } catch (e) { alert("Kitap açılırken hata: " + e); }
+    }
+
+    // --- ZOOM ---
+    function updateZoom(val) {
+        currentZoom = parseFloat(val);
+        const slider = document.getElementById("zoom-slider");
+        if(slider) slider.value = currentZoom;
+        
+        if (currentBook && currentBook.format === "epub") {
+            const wrapper = document.querySelector(".epub-content");
+            if(wrapper) {
+                wrapper.style.width = (600 * currentZoom) + "px";
+                wrapper.style.fontSize = (18 * currentZoom) + "px";
+            }
+        } else if (currentBook) { 
+            const scroller = document.getElementById("pdf-scroller");
+            let scrollRatio = 0;
+            if(scroller.scrollHeight > 0) scrollRatio = scroller.scrollTop / scroller.scrollHeight;
+            updateSpacerHeight();
+            const unitHeight = (BASE_PAGE_HEIGHT * currentZoom) + PAGE_MARGIN;
+            const newWidth = 600 * currentZoom;
+            const newHeight = BASE_PAGE_HEIGHT * currentZoom;
+            
+            document.querySelectorAll('.page-wrapper.pdf-page-container').forEach(div => {
+                const idx = parseInt(div.getAttribute('data-index'));
+                div.style.width = newWidth + "px";
+                div.style.height = newHeight + "px";
+                div.style.top = (idx * unitHeight) + "px";
+                const layer = div.querySelector('.highlight-layer');
+                if(layer) { layer.innerHTML = ""; loadHighlightsOnPage(idx, layer); }
+            });
+            if(scroller.scrollHeight > 0) scroller.scrollTop = scrollRatio * scroller.scrollHeight;
+            renderVisiblePages();
+        }
+    }
+
+    // --- EPUB RENDER ---
+    async function renderEpubChapter(index) {
+        const container = document.getElementById("pdf-visible-content");
+        try {
+            const content = await invoke("get_epub_chapter", { path: currentBook.path, chapterIndex: index });
+            const wrapper = document.createElement("div");
+            wrapper.className = "page-wrapper epub-content"; 
+            wrapper.style.width = (600 * currentZoom) + "px";
+            wrapper.style.fontSize = (18 * currentZoom) + "px";
+            wrapper.style.height = "auto";
+            wrapper.style.position = "relative"; 
+            wrapper.style.top = "0";
+            wrapper.style.marginBottom = "50px";
+            wrapper.innerHTML = content;
+            
+            const controls = document.createElement("div");
+            controls.style.display = "flex"; controls.style.justifyContent = "space-between"; controls.style.marginTop = "20px"; controls.style.padding = "20px";
+            const prevBtn = document.createElement("button"); prevBtn.innerText = "← Önceki"; prevBtn.className = "icon-btn"; prevBtn.style.width = "auto"; prevBtn.style.fontSize = "14px";
+            prevBtn.onclick = () => { if(index > 0) renderEpubChapter(index - 1); };
+            const nextBtn = document.createElement("button"); nextBtn.innerText = "Sonraki →"; nextBtn.className = "icon-btn"; nextBtn.style.width = "auto"; nextBtn.style.fontSize = "14px";
+            nextBtn.onclick = () => { if(index < totalPages - 1) renderEpubChapter(index + 1); };
+            controls.appendChild(prevBtn); controls.appendChild(nextBtn);
+            
+            container.innerHTML = ""; container.appendChild(wrapper); container.appendChild(controls);
+            document.getElementById("pdf-scroller").scrollTop = 0;
+            invoke("save_progress", { bookId: currentBook.id, page: index });
+            document.getElementById("bottom-bar").innerText = `Bölüm: ${index + 1} / ${totalPages}`;
+        } catch(e) { console.error(e); }
+    }
+
+    // --- PDF RENDER ---
+    function updateSpacerHeight() {
+        const unitHeight = (BASE_PAGE_HEIGHT * currentZoom) + PAGE_MARGIN;
+        document.getElementById("pdf-spacer").style.height = (totalPages * unitHeight) + "px";
+    }
+    function renderVisiblePages() {
+        if(!currentBook || currentBook.format === 'epub') return;
+
+        const scroller = document.getElementById("pdf-scroller");
+        const scrollTop = scroller.scrollTop;
+        const viewportHeight = scroller.clientHeight;
+        const unitHeight = (BASE_PAGE_HEIGHT * currentZoom) + PAGE_MARGIN;
+        const startIndex = Math.floor(scrollTop / unitHeight);
+        const renderStart = Math.max(0, startIndex - renderBuffer);
+        const renderEnd = Math.min(totalPages - 1, Math.ceil((scrollTop + viewportHeight) / unitHeight) + renderBuffer);
+
+        const existing = document.querySelectorAll('.page-wrapper.pdf-page-container');
+        existing.forEach(div => {
+            const idx = parseInt(div.getAttribute('data-index'));
+            if (idx < renderStart || idx > renderEnd) div.remove();
+        });
+
+        for (let i = renderStart; i <= renderEnd; i++) {
+            if (!document.getElementById(`wrapper-${i}`)) createPage(i, unitHeight);
+        }
+        document.getElementById("bottom-bar").innerText = `Sayfa: ${startIndex + 1} / ${totalPages}`;
+        if (currentBook.id && startIndex % 1 === 0) invoke("save_progress", { bookId: currentBook.id, page: startIndex });
+    }
+    function createPage(index, unitHeight) {
+        const container = document.getElementById("pdf-visible-content");
+        const width = 600 * currentZoom;
+        const height = BASE_PAGE_HEIGHT * currentZoom;
+        const topPos = index * unitHeight;
+        
+        const wrapper = document.createElement("div"); 
+        wrapper.className = "page-wrapper pdf-page-container"; 
+        wrapper.id = `wrapper-${index}`; 
+        wrapper.setAttribute('data-index', index);
+        wrapper.style.width = width + "px"; 
+        wrapper.style.height = height + "px"; 
+        wrapper.style.top = topPos + "px"; 
+        
+        const layer = document.createElement("div"); 
+        layer.className = "highlight-layer"; 
+        layer.id = `layer-${index}`;
+        layer.onmousedown = (e) => startHighlight(e, index); 
+        layer.onmousemove = (e) => drawHighlight(e); 
+        layer.onmouseup = (e) => endHighlight(e, index);
+        if(!isHighlightMode) layer.style.pointerEvents = "none";
+        
+        const img = document.createElement("img"); 
+        img.className = "pdf-page"; 
+        img.id = `page-${index}`;
+        loadPageImage(index, img);
+        
+        wrapper.appendChild(img); wrapper.appendChild(layer); 
+        loadHighlightsOnPage(index, layer); container.appendChild(wrapper);
+    }
+    
+    // GÜNCELLENDİ: Artık aktif temayı da gönderiyoruz
+    async function loadPageImage(index, imgElement) {
+        try { 
+            const b64 = await invoke("get_page_image", { 
+                pageIndex: index, 
+                scale: 2.0, 
+                theme: activeTheme // Backend'e temayı gönder
+            }); 
+            if(imgElement) { 
+                imgElement.src = b64; 
+                imgElement.onload = () => {
+                    imgElement.style.display = "block";
+                    imgElement.style.opacity = "1";
+                }
+            } 
+        } catch(e) {}
+    }
+
+    function updateBrightness(val) {
+        const overlay = document.getElementById("brightness-overlay");
+        if(overlay) overlay.style.opacity = (100 - val) / 100;
+    }
+
+    window.addEventListener('wheel', function(e) {
+        if (e.ctrlKey && document.getElementById("reader-view").style.display !== "none") {
+            e.preventDefault();
+            let zoomStep = 0.1;
+            let newZoom = (e.deltaY > 0) ? Math.max(0.5, currentZoom - zoomStep) : Math.min(2.5, currentZoom + zoomStep);
+            updateZoom(newZoom);
+        }
+    }, { passive: false });
+
+    // --- THEME & SETTINGS ---
+    function setTheme(theme) {
+        activeTheme = theme;
+        // Reader container'ın class'ını güncelle (Epub ve UI için)
+        const readerView = document.getElementById("reader-view");
+        readerView.className = `theme-${theme}`;
+
+        // PDF ise sayfaları yeniden yükle (Backend'den renkli hallerini çek)
+        if (currentBook && currentBook.format === 'pdf') {
+            const images = document.querySelectorAll('.pdf-page');
+            images.forEach(img => {
+                const idx = parseInt(img.id.split('-')[1]);
+                img.style.opacity = "0.5"; // Yükleniyor efekti
+                loadPageImage(idx, img);
+            });
+        }
+    }
+
+    function toggleHighlightMode() {
+        isHighlightMode = !isHighlightMode;
+        const btn = document.getElementById("highlight-btn");
+        if(isHighlightMode) btn.classList.add("active"); else btn.classList.remove("active");
+        document.querySelectorAll(".highlight-layer").forEach(l => l.style.pointerEvents = isHighlightMode ? "auto" : "none");
+    }
+    function toggleNotesSidebar() {
+        const sb = document.getElementById("notes-sidebar");
+        sb.classList.toggle("open");
+        if(sb.classList.contains("open")) loadNotesList();
+    }
+    
+    function startHighlight(e, pageIndex) { if (!isHighlightMode) return; isDrawing = true; const layer = document.getElementById(`layer-${pageIndex}`); const rect = layer.getBoundingClientRect(); startX = e.clientX - rect.left; startY = e.clientY - rect.top; activeBox = document.createElement("div"); activeBox.className = "highlight-box"; activeBox.style.left = startX + "px"; activeBox.style.top = startY + "px"; layer.appendChild(activeBox); }
+    function drawHighlight(e) { if (!isDrawing || !activeBox) return; const layer = e.target.closest(".highlight-layer"); const rect = layer.getBoundingClientRect(); const curX = e.clientX - rect.left; const curY = e.clientY - rect.top; const w = curX - startX; const h = curY - startY; activeBox.style.width = Math.abs(w) + "px"; activeBox.style.height = Math.abs(h) + "px"; activeBox.style.left = (w < 0 ? curX : startX) + "px"; activeBox.style.top = (h < 0 ? curY : startY) + "px"; }
+    function endHighlight(e, pageIndex) { if (!isDrawing) return; isDrawing = false; if (activeBox) { const w = parseFloat(activeBox.style.width); const h = parseFloat(activeBox.style.height); if (w > 5 && h > 5) { const rectData = { x: parseFloat(activeBox.style.left) / currentZoom, y: parseFloat(activeBox.style.top) / currentZoom, w: w / currentZoom, h: h / currentZoom }; invoke("save_highlight", { bookId: currentBook.id, pageIndex: pageIndex, rectJson: JSON.stringify(rectData) }); loadNotesList(); } else { activeBox.remove(); } activeBox = null; } }
+    async function loadHighlightsOnPage(pageIndex, layerElement) { try { const rects = await invoke("get_highlights", { bookId: currentBook.id, pageIndex: pageIndex }); rects.forEach(json => { const r = JSON.parse(json); const div = document.createElement("div"); div.className = "highlight-box"; div.style.left = (r.x * currentZoom) + "px"; div.style.top = (r.y * currentZoom) + "px"; div.style.width = (r.w * currentZoom) + "px"; div.style.height = (r.h * currentZoom) + "px"; layerElement.appendChild(div); }); } catch(e){} }
+    async function loadNotesList() { if (!currentBook) return; const notes = await invoke("get_book_highlights", { bookId: currentBook.id }); const list = document.getElementById("notes-list"); list.innerHTML = ""; if (notes.length === 0) list.innerHTML = "<div style='color:#777;text-align:center;margin-top:20px'>Henüz not yok.</div>"; notes.forEach(note => { const item = document.createElement("div"); item.className = "note-item"; item.innerHTML = `<span style="font-size:13px; color:#ddd;"><i class="ph ph-bookmark-simple"></i> Sayfa/Bölüm ${note.page_index + 1}</span><button style="color:#ff5252;background:none;border:none;cursor:pointer;" onclick="deleteNote(${note.id})"><i class="ph ph-trash"></i></button>`; item.onclick = (e) => { if(e.target.tagName !== 'BUTTON' && !e.target.closest('button')) { if(currentBook.format === 'epub') renderEpubChapter(note.page_index); else { const unitHeight = (BASE_PAGE_HEIGHT * currentZoom) + PAGE_MARGIN; document.getElementById("pdf-scroller").scrollTo({top: note.page_index * unitHeight, behavior: 'smooth'}); } } }; list.appendChild(item); }); }
+    async function deleteNote(id) { if(confirm("Silinsin mi?")) { await invoke("delete_highlight", { id: id }); loadNotesList(); if(currentBook.format === 'pdf') { const wrappers = document.querySelectorAll('.page-wrapper.pdf-page-container'); wrappers.forEach(w => { const layer = w.querySelector('.highlight-layer'); layer.innerHTML = ""; const idx = parseInt(w.getAttribute('data-index')); loadHighlightsOnPage(idx, layer); }); } } }
+  </script>
+</body>
+</html>

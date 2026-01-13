@@ -1,0 +1,37 @@
+#RUST & TAURI
+src-tauri/target/
+target/
+
+#NODE.JS
+node_modules/
+npm-debug.log
+yarn-error.log
+
+#VERİTABANI & KİŞİSEL VERİLER
+*.db
+*.db-shm
+*.db-wal
+library.db
+
+#İŞLETİM SİSTEMİ
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+.AppleDouble
+.LSOverride
+
+#IDE & EDİTÖR AYARLARI
+.vscode/
+.idea/
+*.swp
+*.swo
+
+#BINARY & DLL
+*.dll
+*.exe
+*.msi
+src-tauri/binaries/
+
+#LOGLAR
+*.log
